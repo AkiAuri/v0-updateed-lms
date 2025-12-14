@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Mail, User, Briefcase, Shield, Eye, EyeOff, RefreshCw } from "lucide-react"
 
 interface AdminProfilePageProps {
-  userId?:  number
+  userId?: number  // ← ADD THIS
 }
 
 interface UserProfile {

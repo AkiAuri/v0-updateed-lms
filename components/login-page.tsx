@@ -9,8 +9,14 @@ import { Label } from "@/components/ui/label"
 import { Eye, EyeOff, Mail, Lock } from "lucide-react"
 
 interface LoginPageProps {
-  onLogin: (role: "teacher" | "admin" | "student", username?:  string) => void
-  onBack: () => void
+  onLogin: (
+      role: "teacher" | "admin" | "student" | "instructor",
+      username?: string,
+      userId?: number,
+      email?: string,
+      fullName?: string
+  ) => void
+  onBack:  () => void
 }
 
 export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
@@ -49,18 +55,27 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body:  JSON.stringify({ username, password }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data. error || 'Invalid credentials.  Please check your username and password.')
+        setError(data.error || 'Invalid credentials.  Please check your username and password.')
         return
       }
 
-      // Successfully authenticated
-      onLogin(data.user. role, data.user.username)
+      // Successfully authenticated - pass all user data
+      // Map 'teacher' role to 'instructor' for navigation
+      const role = data.user.role === 'teacher' ? 'instructor' : data.user.role
+
+      onLogin(
+          role,
+          data.user.username,
+          data.user.id,          // ← User ID
+          data.user.email,       // ← Email
+          data.user.fullName     // ← Full name from profile
+      )
     } catch (err) {
       console.error('Login error:', err)
       setError('An error occurred. Please try again.')
@@ -83,7 +98,6 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
       setError("Please enter the verification code")
       return
     }
-    // Simulate code verification (in real app, would verify with Gmail)
     if (verificationCode === "123456") {
       setError("")
       setForgotStep("newPassword")
@@ -102,7 +116,6 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
       return
     }
     setError("")
-    // In real app, would update password in database
     setTimeout(() => {
       setShowForgotPassword(false)
       setForgotStep("email")
@@ -165,7 +178,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
                       <Input
                           id="username"
                           type="text"
-                          placeholder="Enter your username or email"  // ← Updated placeholder
+                          placeholder="Enter your username or email"
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
                           disabled={isLoading}
@@ -184,7 +197,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
                             type={showPassword ? "text" : "password"}
                             placeholder="Enter your password"
                             value={password}
-                            onChange={(e) => setPassword(e.target. value)}
+                            onChange={(e) => setPassword(e.target.value)}
                             disabled={isLoading}
                             className="bg-input border-border/50 focus:border-primary transition-colors pr-10"
                             autoComplete="current-password"
@@ -195,7 +208,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors text-sm"
                             disabled={isLoading}
                         >
-                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          {showPassword ?  <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
                       </div>
                     </div>
@@ -291,10 +304,10 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
                             <div className="relative">
                               <Input
                                   id="newPass"
-                                  type={showNewPassword ? "text" : "password"}
+                                  type={showNewPassword ?  "text" : "password"}
                                   placeholder="Enter new password"
                                   value={newPassword}
-                                  onChange={(e) => setNewPassword(e. target.value)}
+                                  onChange={(e) => setNewPassword(e.target. value)}
                                   className="bg-input border-border/50 focus:border-primary transition-colors pr-10"
                               />
                               <button
