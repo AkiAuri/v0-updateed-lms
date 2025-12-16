@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { logActivity, getAdminIdFromRequest } from '@/lib/activity-logger';
 
 // GET - Fetch users by role with profiles (read-only, no logging needed)
 export async function GET(request: NextRequest) {
     try {
+        const pool = await getDb();
         const { searchParams } = new URL(request.url);
         const role = searchParams.get('role');
 
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
 // POST - Create new user with profile
 export async function POST(request: NextRequest) {
     try {
+        const pool = await getDb();
         const adminId = getAdminIdFromRequest(request);
         const body = await request.json();
         const {
@@ -84,7 +86,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Hash password
-        const hashedPassword = await bcrypt. hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         // Insert user
         const [userResult] = await pool.execute<ResultSetHeader>(

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket } from 'mysql2';
 import { logActivity, getAdminIdFromRequest } from '@/lib/activity-logger';
 
@@ -9,6 +9,7 @@ export async function GET(
     { params }: { params: { id:  string } }
 ) {
     try {
+        const pool = await getDb();
         const { id } = params;
 
         const [assigned] = await pool.execute<RowDataPacket[]>(`
@@ -40,6 +41,7 @@ export async function POST(
     { params }: { params: { id: string } }
 ) {
     try {
+        const pool = await getDb();
         const adminId = getAdminIdFromRequest(request);
         const { id } = params;
         const { studentId } = await request.json();
@@ -89,6 +91,7 @@ export async function DELETE(
     { params }: { params: { id:  string } }
 ) {
     try {
+        const pool = await getDb();
         const adminId = getAdminIdFromRequest(request);
         const { id } = params;
         const { searchParams } = new URL(request.url);

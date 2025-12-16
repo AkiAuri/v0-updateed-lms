@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket } from 'mysql2';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { logActivity, getAdminIdFromRequest } from '@/lib/activity-logger';
 
 // GET - Fetch single user with profile
@@ -10,6 +10,7 @@ export async function GET(
     { params }: { params: { id: string } }
 ) {
     try {
+        const pool = await getDb();
         const { id } = params;
 
         const [rows] = await pool.execute<RowDataPacket[]>(`
@@ -38,6 +39,7 @@ export async function PUT(
     { params }: { params: { id: string } }
 ) {
     try {
+        const pool = await getDb();
         const { id } = params;
         const adminId = getAdminIdFromRequest(request);
         const body = await request.json();
@@ -117,6 +119,7 @@ export async function DELETE(
     { params }: { params: { id: string } }
 ) {
     try {
+        const pool = await getDb();
         const { id } = params;
         const adminId = getAdminIdFromRequest(request);
 

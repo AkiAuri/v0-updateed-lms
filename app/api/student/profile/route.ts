@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket } from 'mysql2';
 import bcrypt from 'bcryptjs';
 import { logActivity } from '@/lib/activity-logger';
@@ -7,6 +7,7 @@ import { logActivity } from '@/lib/activity-logger';
 // GET - Fetch student profile
 export async function GET(request: NextRequest) {
     try {
+        const pool = await getDb();
         const { searchParams } = new URL(request.url); // Fixed space: request. url
         const userId = searchParams.get('userId');
 
@@ -93,6 +94,7 @@ export async function GET(request: NextRequest) {
 // PUT - Update student password
 export async function PUT(request: NextRequest) { // Fixed double space
     try {
+        const pool = await getDb();
         const body = await request.json();
         const { userId, currentPassword, newPassword } = body;
 

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
     try {
+        const pool = await getDb();
         const { userId, actionType, description } = await request.json();
 
         await pool.execute(

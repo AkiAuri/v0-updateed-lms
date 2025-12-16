@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket } from 'mysql2';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { logActivity, getAdminIdFromRequest } from '@/lib/activity-logger';
 
 interface UserRow extends RowDataPacket {
@@ -14,6 +14,7 @@ interface UserRow extends RowDataPacket {
 
 export async function POST(request:  NextRequest) {
     try {
+        const pool = await getDb();
         const adminId = getAdminIdFromRequest(request);
         const { userId, currentPassword, newPassword } = await request.json();
 

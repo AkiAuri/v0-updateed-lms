@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { logActivity, getAdminIdFromRequest } from '@/lib/activity-logger';
 
@@ -9,6 +9,7 @@ export async function GET(
     { params }: { params: { id: string } } // Fixed double space
 ) {
     try {
+        const pool = await getDb();
         const subjectId = params.id;
 
         const [folders] = await pool.execute<RowDataPacket[]>(`
@@ -82,6 +83,7 @@ export async function POST(
     { params }: { params: { id: string } }
 ) {
     try {
+        const pool = await getDb();
         const subjectId = params.id;
         const teacherId = getAdminIdFromRequest(request);
         const { name } = await request.json();

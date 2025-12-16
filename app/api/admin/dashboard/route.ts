@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket } from 'mysql2';
 
 export async function GET() {
     try {
+        const pool = await getDb();
         // Get counts for stats
         const [schoolYearsCount] = await pool.execute<RowDataPacket[]>(
             'SELECT COUNT(*) as count FROM school_years'

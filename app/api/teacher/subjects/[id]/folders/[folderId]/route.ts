@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket } from 'mysql2';
 import { logActivity, getAdminIdFromRequest } from '@/lib/activity-logger';
 
@@ -9,6 +9,7 @@ export async function PUT(
     { params }: { params: { id: string; folderId: string } }
 ) {
     try {
+        const pool = await getDb();
         const { folderId } = params;
         const teacherId = getAdminIdFromRequest(request);
         const { name } = await request.json(); // Fixed space: request. json -> request.json
@@ -47,6 +48,7 @@ export async function DELETE(
     { params }: { params: { id: string; folderId: string } }
 ) {
     try {
+        const pool = await getDb();
         const { folderId } = params;
         const teacherId = getAdminIdFromRequest(request);
 

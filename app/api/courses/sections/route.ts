@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { logActivity, getAdminIdFromRequest } from '@/lib/activity-logger';
 
 // GET - Fetch sections by grade level
 export async function GET(request: NextRequest) {
     try {
+        const pool = await getDb();
         const { searchParams } = new URL(request.url);
         const gradeLevelId = searchParams.get('gradeLevelId');
 
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
 // POST - Create new section
 export async function POST(request: NextRequest) {
     try {
+        const pool = await getDb();
         const adminId = getAdminIdFromRequest(request);
         const { name, gradeLevelId } = await request.json();
 

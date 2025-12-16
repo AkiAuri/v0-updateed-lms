@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import crypto from 'crypto';
 
 // POST - Generate QR token for a session
 export async function POST(request: NextRequest) {
     try {
+        const pool = await getDb();
         const body = await request.json();
         const { sessionId, subjectId, expiresInMinutes = 60, lateAfterMinutes = 15 } = body;
 
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
 // GET - Validate QR token and get session info (for students)
 export async function GET(request: NextRequest) {
     try {
+        const pool = await getDb();
         const { searchParams } = new URL(request.url); // Fixed space: request. url
         const token = searchParams.get('token');
 
@@ -112,6 +114,7 @@ export async function GET(request: NextRequest) {
 // PUT - Mark student attendance via QR scan
 export async function PUT(request: NextRequest) {
     try {
+        const pool = await getDb();
         const body = await request.json();
         const { token, studentId } = body;
 

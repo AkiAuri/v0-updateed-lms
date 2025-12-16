@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { logActivity, getAdminIdFromRequest } from '@/lib/activity-logger';
 
 // GET - Fetch all school years with counts
 export async function GET() {
     try {
+        const pool = await getDb();
         const [rows] = await pool.execute<RowDataPacket[]>(`
             SELECT 
                 sy.id, 
@@ -29,6 +30,7 @@ export async function GET() {
 // POST - Create new school year
 export async function POST(request: NextRequest) {
     try {
+        const pool = await getDb();
         const adminId = getAdminIdFromRequest(request);
         const { year } = await request.json();
 

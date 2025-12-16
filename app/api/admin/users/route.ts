@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { logActivity, getAdminIdFromRequest } from '@/lib/activity-logger';
 
 // GET - Fetch all users with profiles
 export async function GET() {
     try {
+        const pool = await getDb();
         const [rows] = await pool.execute<RowDataPacket[]>(
             `SELECT
                  u.id, u.username, u.email, u.role, u.created_at,
@@ -39,6 +40,7 @@ export async function GET() {
 // POST - Create new user with profile
 export async function POST(request: NextRequest) {
     try {
+        const pool = await getDb();
         const adminId = getAdminIdFromRequest(request);
         const {
             username,

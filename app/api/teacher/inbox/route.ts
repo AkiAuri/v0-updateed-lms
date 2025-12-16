@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket } from 'mysql2';
 
 interface InboxItem {
@@ -23,6 +23,7 @@ interface InboxItem {
 // GET - Fetch inbox items for a teacher
 export async function GET(request: NextRequest) {
     try {
+        const pool = await getDb();
         const { searchParams } = new URL(request.url);
         const teacherId = searchParams.get('teacherId');
         const limit = parseInt(searchParams.get('limit') || '20', 10);

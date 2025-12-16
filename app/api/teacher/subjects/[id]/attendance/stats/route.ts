@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket } from 'mysql2';
 
 // GET - Fetch attendance statistics for a subject
@@ -8,6 +8,7 @@ export async function GET(
     { params }: { params: { id: string } }
 ) {
     try {
+        const pool = await getDb();
         const subjectId = params.id;
 
         // Get total sessions count

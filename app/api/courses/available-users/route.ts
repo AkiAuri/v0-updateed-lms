@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket } from 'mysql2';
 
 // GET - Fetch available instructors or students
 export async function GET(request: NextRequest) {
     try {
+        const pool = await getDb();
         const { searchParams } = new URL(request.url);
         const role = searchParams.get('role'); // 'teacher' or 'student'
 

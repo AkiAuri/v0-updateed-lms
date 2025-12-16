@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import pool from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { RowDataPacket } from "mysql2"
 
 interface ActivityLog extends RowDataPacket {
@@ -15,6 +15,7 @@ interface ActivityLog extends RowDataPacket {
 
 export async function GET(request:  NextRequest) {
     try {
+        const pool = await getDb();
         const { searchParams } = new URL(request.url)
         const limit = searchParams.get("limit") || "50"
         const actionType = searchParams.get("action_type")
@@ -70,6 +71,7 @@ export async function GET(request:  NextRequest) {
 
 export async function POST(request: NextRequest) {
     try {
+        const pool = await getDb();
         const body = await request.json()
         const { user_id, action_type, description } = body
 

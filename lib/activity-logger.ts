@@ -1,4 +1,4 @@
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 
 export type ActionType = 'login' | 'logout' | 'submission' | 'upload' | 'create' | 'update' | 'delete';
 
@@ -14,6 +14,7 @@ export async function logActivity(
     description: string
 ): Promise<void> {
     try {
+        const pool = await getDb();
         await pool.execute(
             'INSERT INTO activity_logs (user_id, action_type, description) VALUES (?, ?, ?)',
             [adminUserId, actionType, description]

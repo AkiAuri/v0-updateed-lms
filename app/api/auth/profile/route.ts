@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getDb } from "@/lib/db";
 import { RowDataPacket } from 'mysql2';
 import { logActivity, getAdminIdFromRequest } from '@/lib/activity-logger';
 
@@ -23,6 +23,7 @@ interface ProfileRow extends RowDataPacket {
 // GET - Fetch user profile (JOIN users + profiles)
 export async function GET(request: NextRequest) {
     try {
+        const pool = await getDb();
         const { searchParams } = new URL(request.url);
         const userId = searchParams.get('userId');
 
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
 // PUT - Update profile
 export async function PUT(request: NextRequest) {
     try {
+        const pool = await getDb();
         const { searchParams } = new URL(request.url);
         const userId = searchParams.get('userId');
         const body = await request.json();

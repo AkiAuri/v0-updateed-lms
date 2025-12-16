@@ -1,483 +1,705 @@
 "use client"
 
-import { useState } from "react"
-import { ArrowLeft, FileText, Clock, BarChart3, Play, AlertCircle, Upload } from "lucide-react"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import {
+  ArrowLeft,
+  Folder,
+  FileText,
+  Download,
+  Upload,
+  Loader2,
+  RefreshCw,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  X,
+  File,
+  User,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react"
 
 interface SubjectDetailProps {
   subject: any
+  studentId?: number | null
   onBack: () => void
 }
 
-// Data structure definitions
-const contentFolders = {
-  quiz: {
-    name: "Quiz",
-    tasks: [
-      {
-        id: "1",
-        title: "Quiz 1: Functions and Loops",
-        dueDate: "2024-12-15",
-        dueTime: "11:59 PM",
-        submitted: false,
-        graded: false,
-        grade: null,
-        attempts: 0,
-        maxAttempts: 3,
-        isLate: false,
-        instructions: "Complete the quiz on functions and loops concepts. Answer all questions carefully.",
-        submittedFiles: [],
-      },
-      {
-        id: "2",
-        title: "Quiz 2: Arrays",
-        dueDate: "2024-12-22",
-        dueTime: "11:59 PM",
-        submitted: false,
-        graded: false,
-        grade: null,
-        attempts: 0,
-        maxAttempts: 3,
-        isLate: false,
-        instructions: "Answer all questions about array data structures.",
-        submittedFiles: [],
-      },
-    ],
-  },
-  seatwork: {
-    name: "Seatwork",
-    tasks: [
-      {
-        id: "3",
-        title: "Seatwork 1: Problem Solving",
-        dueDate: "2024-12-18",
-        dueTime: "5:00 PM",
-        submitted: true,
-        graded: true,
-        grade: 95,
-        attempts: 1,
-        maxAttempts: 2,
-        isLate: false,
-        instructions: "Solve the given programming problems.",
-        submittedFiles: ["solution_v1.pdf"],
-      },
-    ],
-  },
-  homework: {
-    name: "Homework",
-    tasks: [
-      {
-        id: "4",
-        title: "Homework 1: Recursion Practice",
-        dueDate: "2024-12-20",
-        dueTime: "11:59 PM",
-        submitted: true,
-        graded: true,
-        grade: 88,
-        attempts: 2,
-        maxAttempts: 3,
-        isLate: false,
-        instructions: "Complete all recursion exercises.",
-        submittedFiles: ["hw1_first_attempt.pdf", "hw1_final.pdf"],
-      },
-    ],
-  },
+interface SubmissionFile {
+  id: number
+  name: string
+  type: string
+  url: string
 }
 
-const attendanceRecords = [
-  { date: "2024-12-13", status: "present", grade: "100%" },
-  { date: "2024-12-12", status: "present", grade: "100%" },
-  { date: "2024-12-11", status: "absent", grade: "0%" },
-  { date: "2024-12-10", status: "present", grade: "100%" },
-]
+interface Submission {
+  id: number
+  name: string
+  description?: string
+  dueDate?: string
+  dueTime?: string
+  maxAttempts: number
+  attemptCount: number
+  studentSubmissionId?: number
+  grade?: number | null
+  feedback?: string
+  submittedAt?: string
+  status: "not_submitted" | "submitted" | "graded" | "overdue"
+  canSubmit: boolean
+  files: SubmissionFile[]
+}
 
-const gradeRecords = [
-  { taskId: "1", task: "Quiz 1", date: "2024-12-15", submitted: "Submitted", graded: true, grade: 92 },
-  { taskId: "3", task: "Seatwork 1", date: "2024-12-18", submitted: "Submitted", graded: true, grade: 95 },
-  { taskId: "4", task: "Homework 1", date: "2024-12-20", submitted: "Submitted", graded: true, grade: 88 },
-]
+interface FolderData {
+  id: number
+  name: string
+  submissions: Submission[]
+}
 
-export default function SubjectDetail({ subject, onBack }: SubjectDetailProps) {
-  const [activeTab, setActiveTab] = useState<"content" | "attendance" | "grades">("content")
-  const [showSessionModal, setShowSessionModal] = useState(false)
-  const [sessionActive, setSessionActive] = useState(true)
-  const [expandedFolder, setExpandedFolder] = useState<string | null>("quiz")
-  const [selectedSubmission, setSelectedSubmission] = useState<string | null>(null)
+interface UploadedFile {
+  name: string
+  type: string
+  url: string
+  size: number
+}
 
-  const toggleFolder = (folder: string) => {
-    setExpandedFolder(expandedFolder === folder ? null : folder)
+export default function SubjectDetail({ subject, studentId, onBack }: SubjectDetailProps) {
+  const [folders, setFolders] = useState<FolderData[]>([])
+  const [subjectDetails, setSubjectDetails] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set())
+
+  // Submission modal states
+  const [showSubmitModal, setShowSubmitModal] = useState(false)
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [submitSuccess, setSubmitSuccess] = useState(false)
+
+  // View submission modal
+  const [showViewModal, setShowViewModal] = useState(false)
+  const [viewingSubmission, setViewingSubmission] = useState<any>(null)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const fetchSubjectDetails = useCallback(async () => {
+    if (!subject?.id || !studentId) {
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const response = await fetch(`/api/student/subjects/${subject.id}?studentId=${studentId}`)
+      const data = await response.json()
+
+      if (data.success) {
+        setSubjectDetails(data.subject)
+        setFolders(data.folders)
+
+        // Expand first folder by default
+        if (data.folders.length > 0) {
+          setExpandedFolders(new Set([data.folders[0].id]))
+        }
+      } else {
+        setError(data.error || "Failed to fetch subject details")
+      }
+    } catch (err) {
+      console.error("Failed to fetch subject details:", err)
+      setError("Failed to connect to server")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [subject?.id, studentId])
+
+  useEffect(() => {
+    fetchSubjectDetails()
+  }, [fetchSubjectDetails])
+
+  const toggleFolder = (folderId: number) => {
+    const newExpanded = new Set(expandedFolders)
+    if (newExpanded.has(folderId)) {
+      newExpanded.delete(folderId)
+    } else {
+      newExpanded.add(folderId)
+    }
+    setExpandedFolders(newExpanded)
   }
 
-  return (
-    <div className="min-h-screen bg-slate-900">
-      <div className="flex items-center justify-between px-6 py-4">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-blue-400 hover:text-blue-300 font-medium transition-colors"
-        >
-          <ArrowLeft size={20} />
-          Back to Subjects
-        </button>
-      </div>
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
-      <div className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-2xl p-8 shadow-lg mx-6 mb-6">
-        <h1 className="text-3xl md:text-4xl font-bold mb-3">{subject.name}</h1>
-        <p className="text-blue-100 text-lg">
-          {subject.code} • {subject.instructor} • {subject.dayTime}
-        </p>
-      </div>
+    setIsUploading(true)
+    setUploadError(null)
 
-      {sessionActive && (
-        <div className="mx-6 mb-6 bg-gradient-to-r from-amber-600/20 to-orange-600/20 border border-amber-600/50 rounded-xl p-6">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle size={24} className="text-amber-400 mt-0.5" />
-              <div>
-                <h3 className="font-bold text-white flex items-center gap-2 mb-1">New Attendance Session!</h3>
-                <p className="text-sm text-slate-300">
-                  Your instructor has opened an attendance session. Click below to join and scan the QR code.
-                </p>
-              </div>
-            </div>
+    for (const file of Array.from(files)) {
+      try {
+        const formData = new FormData()
+        formData.append("file", file)
+        formData.append("folder", "student-submissions")
+        formData.append("studentId", studentId?.toString() || "")
+        formData.append("submissionId", selectedSubmission?.id.toString() || "")
+
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          setUploadedFiles((prev) => [
+            ...prev,
+            {
+              name: data.file.originalName,
+              type: data.file.type,
+              url: data.file.url,
+              size: data.file.size,
+            },
+          ])
+        } else {
+          setUploadError(data.error || "Failed to upload file")
+        }
+      } catch (err) {
+        console.error("Upload error:", err)
+        setUploadError("Failed to upload file")
+      }
+    }
+
+    setIsUploading(false)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  const removeUploadedFile = (index: number) => {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSubmit = async () => {
+    if (!selectedSubmission || !studentId) return
+
+    setIsSubmitting(true)
+    setUploadError(null)
+
+    try {
+      const response = await fetch("/api/student/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId: selectedSubmission.id,
+          studentId,
+          files: uploadedFiles.map((f) => ({
+            name: f.name,
+            type: f.type,
+            url: f.url,
+          })),
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setSubmitSuccess(true)
+        setTimeout(() => {
+          setShowSubmitModal(false)
+          setSubmitSuccess(false)
+          setSelectedSubmission(null)
+          setUploadedFiles([])
+          fetchSubjectDetails() // Refresh data
+        }, 2000)
+      } else {
+        setUploadError(data.error || "Failed to submit")
+      }
+    } catch (err) {
+      console.error("Submit error:", err)
+      setUploadError("Failed to submit")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const openSubmitModal = (submission: Submission) => {
+    setSelectedSubmission(submission)
+    setUploadedFiles([])
+    setUploadError(null)
+    setSubmitSuccess(false)
+    setShowSubmitModal(true)
+  }
+
+  const closeSubmitModal = () => {
+    setShowSubmitModal(false)
+    setSelectedSubmission(null)
+    setUploadedFiles([])
+    setUploadError(null)
+  }
+
+  const viewSubmissionDetails = async (submission: Submission) => {
+    setViewingSubmission(submission)
+    setShowViewModal(true)
+  }
+
+  const getStatusBadge = (submission: Submission) => {
+    switch (submission.status) {
+      case "graded":
+        return (
+            <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-green-900/30 text-green-300">
+            <CheckCircle className="w-3 h-3" />
+            Graded: {submission.grade}
+          </span>
+        )
+      case "submitted":
+        return (
+            <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-blue-900/30 text-blue-300">
+            <CheckCircle className="w-3 h-3" />
+            Submitted
+          </span>
+        )
+      case "overdue":
+        return (
+            <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-red-900/30 text-red-300">
+            <AlertCircle className="w-3 h-3" />
+            Overdue
+          </span>
+        )
+      default:
+        return (
+            <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-slate-700 text-slate-300">
+            <Clock className="w-3 h-3" />
+            Not Submitted
+          </span>
+        )
+    }
+  }
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return "No due date"
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + " B"
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB"
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+        <div className="space-y-6 p-6">
+          <div className="flex items-center gap-4">
+            <button onClick={onBack} className="flex items-center gap-2 text-green-400 hover:text-green-300">
+              <ArrowLeft className="h-5 w-5" />
+              <span>Back to Subjects</span>
+            </button>
+          </div>
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 text-green-400 animate-spin" />
+            <span className="ml-3 text-slate-400">Loading subject...</span>
+          </div>
+        </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+        <div className="space-y-6 p-6">
+          <div className="flex items-center gap-4">
+            <button onClick={onBack} className="flex items-center gap-2 text-green-400 hover:text-green-300">
+              <ArrowLeft className="h-5 w-5" />
+              <span>Back to Subjects</span>
+            </button>
+          </div>
+          <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 flex items-center gap-3">
+            <p className="text-red-400">{error}</p>
             <button
-              onClick={() => setShowSessionModal(true)}
-              className="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg font-semibold transition-all whitespace-nowrap"
+                onClick={fetchSubjectDetails}
+                className="ml-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
             >
-              Join Session!
+              Retry
             </button>
           </div>
         </div>
-      )}
+    )
+  }
 
-      <div className="mx-6 flex gap-2 border-b border-slate-700/50 overflow-x-auto">
-        {[
-          { id: "content", label: "Content", icon: FileText },
-          { id: "attendance", label: "Attendance", icon: Clock },
-          { id: "grades", label: "Grades", icon: BarChart3 },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`px-4 py-3 font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
-              activeTab === tab.id
-                ? "border-blue-600 text-blue-400"
-                : "border-transparent text-slate-400 hover:text-slate-300"
-            }`}
-          >
-            <tab.icon size={18} />
-            {tab.label}
+  return (
+      <div className="space-y-6 p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <button onClick={onBack} className="flex items-center gap-2 text-green-400 hover:text-green-300">
+            <ArrowLeft className="h-5 w-5" />
+            <span>Back to Subjects</span>
           </button>
-        ))}
-      </div>
+          <button
+              onClick={fetchSubjectDetails}
+              className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+              title="Refresh"
+          >
+            <RefreshCw className="w-5 h-5" />
+          </button>
+        </div>
 
-      {selectedSubmission ? (
-        <div className="min-h-screen bg-slate-900">
-          <div className="max-w-6xl mx-auto">
-            {/* Submission Header */}
-            <div className="sticky top-0 bg-slate-900 border-b border-slate-700/50 z-40">
-              <div className="flex items-center justify-between px-6 py-4">
-                <button
-                  onClick={() => setSelectedSubmission(null)}
-                  className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
-                >
-                  <ArrowLeft size={20} />
-                  Back to Content
-                </button>
-                <div className="text-sm text-slate-400">Submission Details</div>
-              </div>
+        {/* Subject Banner */}
+        <div
+            className={`bg-gradient-to-r ${subject.color || "from-green-500 to-green-600"} rounded-xl p-8 text-white shadow-lg`}
+        >
+          <h1 className="text-4xl font-bold mb-2">{subject.name}</h1>
+          <p className="text-white/90 mb-4">{subject.code}</p>
+          <div className="flex gap-6 text-sm flex-wrap">
+            <div>
+              <p className="text-white/70">Section</p>
+              <p className="font-semibold">{subjectDetails?.section_name || subject.sectionName}</p>
             </div>
-
-            {/* Main Content Area */}
-            <div className="p-6 space-y-8">
-              {(() => {
-                let task = null
-                for (const folder of Object.values(contentFolders)) {
-                  const found = (folder as any).tasks.find((t: any) => t.id === selectedSubmission)
-                  if (found) {
-                    task = found
-                    break
-                  }
-                }
-
-                if (!task) return null
-
-                return (
-                  <>
-                    {/* Title Section */}
-                    <div>
-                      <h1 className="text-4xl font-bold text-white mb-4">{task.title}</h1>
-                      <div className="flex flex-wrap gap-4 text-slate-400">
-                        <div className="flex items-center gap-2">
-                          <Clock size={18} />
-                          Due: {task.dueDate} at {task.dueTime}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      {/* Left Column - Task Details */}
-                      <div className="lg:col-span-2 space-y-6">
-                        {/* Instructions */}
-                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
-                          <h2 className="text-xl font-bold text-white mb-4">Instructions</h2>
-                          <p className="text-slate-300 leading-relaxed">{task.instructions}</p>
-                        </div>
-
-                        {/* File Upload Section */}
-                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
-                          <h2 className="text-xl font-bold text-white mb-4">Submit Your Files</h2>
-                          <div className="space-y-4">
-                            <div className="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer">
-                              <Upload size={32} className="mx-auto mb-3 text-slate-400" />
-                              <p className="text-white font-medium mb-1">Click to upload or drag and drop</p>
-                              <p className="text-sm text-slate-400">
-                                Text, Docs, PPT, Excel, Pictures, PDF, Links, Videos
-                              </p>
-                              <input type="file" multiple className="hidden" />
-                            </div>
-                            <p className="text-xs text-slate-400 text-center">Maximum file size: 50MB per file</p>
-                            <button className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
-                              <Upload size={18} />
-                              Submit Assignment
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right Column - Status Cards */}
-                      <div className="space-y-4">
-                        {/* Status Cards */}
-                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
-                          <p className="text-sm text-slate-400 mb-2">Submission Status</p>
-                          <p className={`text-2xl font-bold ${task.submitted ? "text-green-400" : "text-slate-400"}`}>
-                            {task.submitted ? "Submitted" : "Not Submitted"}
-                          </p>
-                        </div>
-
-                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
-                          <p className="text-sm text-slate-400 mb-2">Grading Status</p>
-                          <p className={`text-2xl font-bold ${task.graded ? "text-green-400" : "text-slate-400"}`}>
-                            {task.graded ? "Graded" : "Pending"}
-                          </p>
-                        </div>
-
-                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
-                          <p className="text-sm text-slate-400 mb-2">Attempts Used</p>
-                          <p className="text-2xl font-bold text-cyan-400">
-                            {task.attempts}/{task.maxAttempts}
-                          </p>
-                        </div>
-
-                        <div
-                          className={`rounded-xl p-6 border ${
-                            task.isLate ? "bg-red-900/20 border-red-700/50" : "bg-green-900/20 border-green-700/50"
-                          }`}
-                        >
-                          <p className="text-sm text-slate-400 mb-2">Late Submission</p>
-                          <p className={`text-lg font-bold ${task.isLate ? "text-red-400" : "text-green-400"}`}>
-                            {task.isLate ? "Yes" : "No"}
-                          </p>
-                        </div>
-
-                        {task.grade && (
-                          <div className="bg-gradient-to-br from-blue-900/30 to-cyan-900/30 border border-blue-700/50 rounded-xl p-6">
-                            <p className="text-sm text-slate-400 mb-2">Your Grade</p>
-                            <p className="text-3xl font-bold text-cyan-400">{task.grade}/100</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )
-              })()}
+            <div>
+              <p className="text-white/70">Grade Level</p>
+              <p className="font-semibold">{subjectDetails?.grade_level_name || subject.gradeLevelName}</p>
+            </div>
+            <div>
+              <p className="text-white/70">Instructor</p>
+              <p className="font-semibold">
+                {subjectDetails?.instructors?.map((i: any) => i.name).join(", ") || subject.instructors}
+              </p>
             </div>
           </div>
         </div>
-      ) : (
-        <div className="mx-6 my-6">
-          {activeTab === "content" && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-white">Tasks & Assignments</h2>
 
-              {Object.entries(contentFolders).map(([key, folder]: [string, any]) => (
-                <div key={key} className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
-                  <button
-                    onClick={() => toggleFolder(key)}
-                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <FileText size={20} className="text-blue-400" />
-                      <span className="font-semibold text-white">{folder.name}</span>
-                      <span className="text-sm text-slate-400">({folder.tasks.length})</span>
-                    </div>
-                    <span className={`transition-transform ${expandedFolder === key ? "rotate-180" : ""}`}>▼</span>
-                  </button>
+        {/* Content */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold text-white">Course Content</h2>
 
-                  {expandedFolder === key && (
-                    <div className="border-t border-slate-700/50 space-y-2 p-4">
-                      {folder.tasks.map((task: any) => (
-                        <button
-                          key={task.id}
-                          onClick={() => setSelectedSubmission(task.id)}
-                          className="w-full p-4 bg-slate-900 hover:bg-slate-900/80 border border-slate-700/50 hover:border-blue-500/50 rounded-lg text-left transition-all"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1">
-                              <h4 className="font-semibold text-white">{task.title}</h4>
-                              <p className="text-sm text-slate-400 mt-1">
-                                Due: {task.dueDate} at {task.dueTime}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap justify-end">
-                              <span
-                                className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                                  task.submitted
-                                    ? task.graded
-                                      ? "bg-green-900/30 text-green-300"
-                                      : "bg-blue-900/30 text-blue-300"
-                                    : "bg-slate-700 text-slate-300"
-                                }`}
-                              >
-                                {task.submitted ? (task.graded ? "Graded" : "Submitted") : "Not Submitted"}
-                              </span>
-                              {task.grade && <span className="text-lg font-bold text-cyan-400">{task.grade}</span>}
-                            </div>
+          {folders.length === 0 ? (
+              <div className="text-center py-12 bg-slate-800/30 border border-slate-700/30 rounded-xl">
+                <Folder size={48} className="mx-auto text-slate-600 mb-4" />
+                <p className="text-slate-400 font-medium mb-2">No content yet</p>
+                <p className="text-slate-500 text-sm">Your instructor hasn't added any content yet</p>
+              </div>
+          ) : (
+              <div className="space-y-3">
+                {folders.map((folder) => (
+                    <div
+                        key={folder.id}
+                        className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden"
+                    >
+                      {/* Folder Header */}
+                      <button
+                          onClick={() => toggleFolder(folder.id)}
+                          className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Folder size={20} className="text-green-400" />
+                          <span className="font-semibold text-white">{folder.name}</span>
+                          <span className="text-sm text-slate-400">({folder.submissions.length})</span>
+                        </div>
+                        {expandedFolders.has(folder.id) ? (
+                            <ChevronDown className="w-5 h-5 text-slate-400" />
+                        ) : (
+                            <ChevronRight className="w-5 h-5 text-slate-400" />
+                        )}
+                      </button>
+
+                      {/* Folder Contents */}
+                      {expandedFolders.has(folder.id) && (
+                          <div className="border-t border-slate-700/50 p-4 space-y-3">
+                            {folder.submissions.length === 0 ? (
+                                <p className="text-slate-500 text-sm text-center py-4">No submissions in this folder</p>
+                            ) : (
+                                folder.submissions.map((submission) => (
+                                    <div
+                                        key={submission.id}
+                                        className="p-4 bg-slate-900 border border-slate-700/50 rounded-lg"
+                                    >
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-3 mb-2">
+                                            <FileText size={18} className="text-slate-400" />
+                                            <h4 className="font-semibold text-white">{submission.name}</h4>
+                                            {getStatusBadge(submission)}
+                                          </div>
+                                          {submission.description && (
+                                              <p className="text-sm text-slate-400 mb-3 ml-7">{submission.description}</p>
+                                          )}
+                                          <div className="flex items-center gap-4 text-xs text-slate-500 ml-7">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  Due: {formatDate(submission.dueDate)}
+                                </span>
+                                            <span>
+                                  Attempts: {submission.attemptCount}/{submission.maxAttempts}
+                                </span>
+                                          </div>
+
+                                          {/* Instructor files */}
+                                          {submission.files.length > 0 && (
+                                              <div className="mt-3 ml-7">
+                                                <p className="text-xs text-slate-400 mb-2">Attached Files:</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                  {submission.files.map((file) => (
+                                                      <a
+                                                          key={file.id}
+                                                          href={file.url}
+                                                          target="_blank"
+                                                          rel="noopener noreferrer"
+                                                          className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-300 transition-colors"
+                                                      >
+                                                        <Download className="w-3 h-3" />
+                                                        {file.name}
+                                                      </a>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                          )}
+
+                                          {/* Feedback if graded */}
+                                          {submission.feedback && (
+                                              <div className="mt-3 ml-7 p-3 bg-green-900/20 border border-green-500/30 rounded-lg">
+                                                <p className="text-xs text-green-400 font-medium mb-1">Instructor Feedback:</p>
+                                                <p className="text-sm text-green-300">{submission.feedback}</p>
+                                              </div>
+                                          )}
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="flex flex-col gap-2">
+                                          {submission.canSubmit && submission.status !== "graded" && (
+                                              <Button
+                                                  onClick={() => openSubmitModal(submission)}
+                                                  size="sm"
+                                                  className="bg-green-600 hover:bg-green-700 gap-2"
+                                              >
+                                                <Upload className="w-4 h-4" />
+                                                {submission.attemptCount > 0 ? "Resubmit" : "Submit"}
+                                              </Button>
+                                          )}
+                                          {submission.studentSubmissionId && (
+                                              <Button
+                                                  onClick={() => viewSubmissionDetails(submission)}
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="text-slate-300"
+                                              >
+                                                View Submission
+                                              </Button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                ))
+                            )}
                           </div>
-                        </button>
-                      ))}
+                      )}
                     </div>
+                ))}
+              </div>
+          )}
+        </div>
+
+        {/* Submit Modal */}
+        {showSubmitModal && selectedSubmission && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 rounded-t-2xl">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Upload size={24} />
+                    Submit Assignment
+                  </h3>
+                  <p className="text-green-100 text-sm mt-1">{selectedSubmission.name}</p>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  {!submitSuccess ? (
+                      <>
+                        {/* Submission Info */}
+                        <div className="p-3 bg-slate-900 rounded-lg text-sm">
+                          <div className="flex justify-between text-slate-400 mb-1">
+                            <span>Due Date:</span>
+                            <span className="text-white">{formatDate(selectedSubmission.dueDate)}</span>
+                          </div>
+                          <div className="flex justify-between text-slate-400">
+                            <span>Attempt: </span>
+                            <span className="text-white">
+                        {selectedSubmission.attemptCount + 1} of {selectedSubmission.maxAttempts}
+                      </span>
+                          </div>
+                        </div>
+
+                        {/* File Upload Area */}
+                        <div>
+                          <label className="text-sm font-semibold text-slate-300 mb-2 block">
+                            Upload Files
+                          </label>
+                          <div
+                              onClick={() => fileInputRef.current?.click()}
+                              className="border-2 border-dashed border-slate-600 hover:border-green-500 rounded-lg p-8 text-center cursor-pointer transition-colors"
+                          >
+                            {isUploading ? (
+                                <Loader2 className="w-8 h-8 text-green-400 animate-spin mx-auto" />
+                            ) : (
+                                <>
+                                  <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                                  <p className="text-slate-400 text-sm">Click to upload files</p>
+                                  <p className="text-slate-500 text-xs mt-1">
+                                    PDF, DOC, DOCX, Images, ZIP (Max 10MB each)
+                                  </p>
+                                </>
+                            )}
+                          </div>
+                          <input
+                              ref={fileInputRef}
+                              type="file"
+                              multiple
+                              onChange={handleFileSelect}
+                              className="hidden"
+                              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.webp,.zip,.rar"
+                          />
+                        </div>
+
+                        {/* Uploaded Files List */}
+                        {uploadedFiles.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-sm font-semibold text-slate-300">
+                                Uploaded Files ({uploadedFiles.length})
+                              </p>
+                              {uploadedFiles.map((file, index) => (
+                                  <div
+                                      key={index}
+                                      className="flex items-center justify-between p-3 bg-slate-900 rounded-lg"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <File className="w-5 h-5 text-green-400" />
+                                      <div>
+                                        <p className="text-sm text-white truncate max-w-[200px]">{file.name}</p>
+                                        <p className="text-xs text-slate-500">{formatFileSize(file.size)}</p>
+                                      </div>
+                                    </div>
+                                    <button
+                                        onClick={() => removeUploadedFile(index)}
+                                        className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400 transition-colors"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                              ))}
+                            </div>
+                        )}
+
+                        {/* Error */}
+                        {uploadError && (
+                            <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+                              <p className="text-red-300 text-sm">{uploadError}</p>
+                            </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex gap-3 pt-2">
+                          <Button onClick={closeSubmitModal} variant="outline" className="flex-1">
+                            Cancel
+                          </Button>
+                          <Button
+                              onClick={handleSubmit}
+                              disabled={isSubmitting || uploadedFiles.length === 0}
+                              className="flex-1 bg-green-600 hover:bg-green-700 gap-2"
+                          >
+                            {isSubmitting ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Submitting...
+                                </>
+                            ) : (
+                                <>
+                                  <Upload className="w-4 h-4" />
+                                  Submit
+                                </>
+                            )}
+                          </Button>
+                        </div>
+                      </>
+                  ) : (
+                      <div className="py-8 text-center space-y-3">
+                        <div className="w-16 h-16 mx-auto bg-green-500/20 border border-green-500 rounded-full flex items-center justify-center">
+                          <CheckCircle className="w-8 h-8 text-green-400" />
+                        </div>
+                        <p className="text-white font-semibold">Submitted Successfully!</p>
+                        <p className="text-slate-400 text-sm">Your assignment has been submitted.</p>
+                      </div>
                   )}
                 </div>
-              ))}
+              </div>
             </div>
-          )}
+        )}
 
-          {activeTab === "attendance" && (
-            <div className="space-y-4">
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {/* View Submission Modal */}
+        {showViewModal && viewingSubmission && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl">
+                <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 rounded-t-2xl flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-slate-400 mb-2">Overall Score</p>
-                    <p className="text-3xl font-bold text-cyan-400">92%</p>
+                    <h3 className="text-xl font-bold text-white">Your Submission</h3>
+                    <p className="text-blue-100 text-sm mt-1">{viewingSubmission.name}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-slate-400 mb-2">Present</p>
-                    <p className="text-3xl font-bold text-green-400">12</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-400 mb-2">Absent</p>
-                    <p className="text-3xl font-bold text-red-400">1</p>
-                  </div>
+                  <button
+                      onClick={() => setShowViewModal(false)}
+                      className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5 text-white" />
+                  </button>
                 </div>
 
-                <div className="space-y-2">
-                  {attendanceRecords.map((record, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-4 bg-slate-900/50 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-colors"
-                    >
-                      <span className="text-white font-medium">{record.date}</span>
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            record.status === "present"
-                              ? "bg-green-900/30 text-green-300 border border-green-700/50"
-                              : "bg-red-900/30 text-red-300 border border-red-700/50"
-                          }`}
-                        >
-                          {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                        </span>
-                        <span className="text-slate-400 font-semibold">{record.grade}</span>
+                <div className="p-6 space-y-4">
+                  {/* Status */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Status:</span>
+                    {getStatusBadge(viewingSubmission)}
+                  </div>
+
+                  {/* Grade */}
+                  {viewingSubmission.grade !== null && (
+                      <div className="p-4 bg-green-900/20 border border-green-500/30 rounded-lg text-center">
+                        <p className="text-green-400 text-sm mb-1">Grade</p>
+                        <p className="text-3xl font-bold text-green-300">{viewingSubmission.grade}</p>
                       </div>
-                    </div>
-                  ))}
+                  )}
+
+                  {/* Feedback */}
+                  {viewingSubmission.feedback && (
+                      <div className="p-4 bg-slate-900 rounded-lg">
+                        <p className="text-sm text-slate-400 mb-2">Instructor Feedback:</p>
+                        <p className="text-white">{viewingSubmission.feedback}</p>
+                      </div>
+                  )}
+
+                  {/* Submitted At */}
+                  {viewingSubmission.submittedAt && (
+                      <div className="text-sm text-slate-400">
+                        Submitted: {new Date(viewingSubmission.submittedAt).toLocaleString()}
+                      </div>
+                  )}
+
+                  {/* Attempt Info */}
+                  <div className="text-sm text-slate-400">
+                    Attempt {viewingSubmission.attemptCount} of {viewingSubmission.maxAttempts}
+                  </div>
+
+                  <Button onClick={() => setShowViewModal(false)} className="w-full">
+                    Close
+                  </Button>
                 </div>
               </div>
             </div>
-          )}
-
-          {activeTab === "grades" && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-white mb-4">Grade Records</h2>
-              {gradeRecords.map((record, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setSelectedSubmission(record.taskId)}
-                  className="w-full bg-slate-800/50 border border-slate-700/50 hover:border-blue-500/50 rounded-xl p-5 transition-all text-left"
-                >
-                  <div className="flex items-center justify-between flex-wrap gap-4">
-                    <div>
-                      <h3 className="font-bold text-white">{record.task}</h3>
-                      <p className="text-sm text-slate-400">{record.date}</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          record.graded
-                            ? "bg-green-900/30 text-green-300 border border-green-700/50"
-                            : "bg-slate-700 text-slate-300"
-                        }`}
-                      >
-                        {record.graded ? "Graded" : "Pending"}
-                      </span>
-                      {record.grade && <span className="text-2xl font-bold text-cyan-400">{record.grade}</span>}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {showSessionModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="bg-gradient-to-r from-blue-600 to-cyan-600 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <Play size={24} />
-                Attendance Session
-              </h3>
-              <button onClick={() => setShowSessionModal(false)} className="text-white/80 hover:text-white">
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 text-center">
-                <p className="text-slate-300 mb-2 font-semibold">Session Timer</p>
-                <p className="text-3xl font-bold text-amber-400">10:30</p>
-                <p className="text-xs text-slate-400 mt-2">Time remaining to mark attendance</p>
-              </div>
-
-              <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-6 text-center">
-                <p className="text-slate-300 mb-3">Scan the QR code provided by your instructor</p>
-                <div className="w-full h-48 bg-slate-800 border-2 border-dashed border-slate-600 rounded-lg flex items-center justify-center">
-                  <div className="text-center">
-                    <FileText size={32} className="mx-auto text-slate-600 mb-2" />
-                    <p className="text-sm text-slate-500">QR Scanner</p>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  setShowSessionModal(false)
-                  setSessionActive(false)
-                }}
-                className="w-full px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold transition-all"
-              >
-                Confirm Attendance
-              </button>
-              <button
-                onClick={() => setShowSessionModal(false)}
-                className="w-full px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
   )
 }
